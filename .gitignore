@@ -1,0 +1,12 @@
+# macosx
+.DS_Store
+
+# maven
+target/
+.flattened-pom.xml
+
+# intellij
+.idea/
+*.iml
+*.iws
+*.ipr
