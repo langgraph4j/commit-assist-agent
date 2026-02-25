@@ -5,18 +5,24 @@ import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.gui2.*;
 import com.googlecode.lanterna.gui2.dialogs.WaitingDialog;
-import com.googlecode.lanterna.screen.Screen;
+import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
+import com.googlecode.lanterna.terminal.MouseCaptureMode;
+import io.modelcontextprotocol.spec.McpSchema;
 import org.bsc.langgraph4j.*;
 import org.bsc.langgraph4j.spring.ai.AiModel;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-public class CLI {
+import static java.util.Objects.requireNonNull;
+
+public class CLI implements Closeable {
 
     static final class TextEditor {
 
@@ -75,19 +81,51 @@ public class CLI {
 
             label.setText( "executing step: [%s] .....".formatted( output.node() ));
         }
+
+        public void  updateFromMcpNotification( McpSchema.LoggingMessageNotification notification ) {
+            label.setText( "Mcp[%s]: %s  ".formatted( notification.level().name(), notification.data() ));
+        }
+    }
+
+    private final TerminalScreen screen;
+    private final MultiWindowTextGUI gui;
+    private final AtomicReference<WaitingDialogHolder> dialogHolder = new AtomicReference<>();
+    private final WaitingDialogHolder dialog;
+    private final BasicWindow window;
+
+    public CLI() throws IOException {
+        this.screen = new DefaultTerminalFactory()
+                .setMouseCaptureMode( MouseCaptureMode.CLICK_RELEASE_DRAG_MOVE )
+                .createScreen();
+
+        dialog = WaitingDialogHolder.of("Commit Agent", "process");
+
+        this.screen.startScreen();
+
+        this.gui = new MultiWindowTextGUI(screen);
+
+        this.window = new BasicWindow("Commit Description " );
+
+    }
+
+    public void stop() throws IOException {
+        requireNonNull(screen, "screen cannot be null").stopScreen();
+    }
+
+    @Override
+    public void close() throws IOException {
+        stop();
     }
 
     private void mainLoop( CompiledGraph<CommitAgent.State> agent,
-                           MultiWindowTextGUI gui,
-                           BasicWindow window,
                            Function<String,Optional<String>> textConfirmation) throws Exception {
 
-        final var config = RunnableConfig.builder().build();
+        final var config = RunnableConfig.builder()
+                .addMetadata( "USE_JSON_OUTPUT", true)
+                .build();
 
         var input = GraphInput.noArgs();
         NodeOutput<CommitAgent.State> output;
-
-        final var dialog = WaitingDialogHolder.of("Commit Agent", "process");
 
         do {
 
@@ -135,18 +173,13 @@ public class CLI {
     }
 
     public void run( String[] args ) throws Exception {
-        final Screen screen = new DefaultTerminalFactory().createScreen();
 
-        screen.startScreen();
-        var terminalSize = screen.getTerminalSize();
-
-        final var gui = new MultiWindowTextGUI(screen);
+        final var terminalSize = screen.getTerminalSize();
 
         gui.setTheme(new SimpleTheme(
                 TextColor.ANSI.WHITE,
                 TextColor.ANSI.BLACK));
 
-        final var window = new BasicWindow("Commit Description " + terminalSize);
 
         final var  panel = new Panel(new LinearLayout(Direction.VERTICAL));
 
@@ -174,14 +207,16 @@ public class CLI {
                 Path.of( "." );
 
         final var staged = args.length >= 1 && Boolean.parseBoolean(args[1]);
+
         final var agent = CommitAgent.builder()
-                .chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
-                //.chatModel( AiModel.OLLAMA.chatModel("qwen3"))
+                //.chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
+                .chatModel( AiModel.OLLAMA.chatModel("qwen3"))
                 .repositoryPath( repositoryPath )
                 .staged( staged )
+                .loggingConsumer(dialog::updateFromMcpNotification)
                 .build();
 
-        mainLoop(agent, gui, window,  (text) -> {
+        mainLoop(agent, (text) -> {
 
             editor.setInitValue(text);
 
@@ -201,8 +236,9 @@ public class CLI {
 
     public static void main(String[] args) throws Exception {
 
-        final var cli = new CLI();
-        cli.run(args);
+        try( final var cli = new CLI() ) {
+            cli.run(args);
+        }
         System.exit(0);
     }
 }
