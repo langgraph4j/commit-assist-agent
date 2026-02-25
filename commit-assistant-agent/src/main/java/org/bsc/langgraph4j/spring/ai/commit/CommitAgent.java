@@ -1,5 +1,7 @@
 package org.bsc.langgraph4j.spring.ai.commit;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.bsc.langgraph4j.*;
 import org.bsc.langgraph4j.action.AsyncCommandAction;
@@ -21,12 +23,13 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.mcp.AsyncMcpToolCallbackProvider;
 import reactor.core.publisher.Mono;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
@@ -40,21 +43,51 @@ import static org.bsc.langgraph4j.utils.CollectionsUtils.mergeMap;
 public interface CommitAgent {
 
     record CommitOutput(
+            @JsonPropertyDescription("commit type")
+            @JsonProperty(value = "type", required = true)
             String type,
+            @JsonPropertyDescription("commit scope")
+            @JsonProperty("scope")
             String scope,
+            @JsonPropertyDescription("commit description")
+            @JsonProperty(value="description", required = true)
             String description,
+            @JsonPropertyDescription("commit body")
+            @JsonProperty("body")
             String body,
+            @JsonPropertyDescription("commit footer")
+            @JsonProperty("footers")
             String footers) {
 
+        private Optional<String> sanitizeScope() {
+            return ofNullable( scope ).map( s -> {
+                try {
+                    final var p = Paths.get(s);
+                    final var fileName = Objects.toString(p.getFileName());
+                    int dotIndex = fileName.lastIndexOf('.');
+                    final var result =  (dotIndex > 0) ?
+                            fileName.substring(0, dotIndex) :
+                            fileName;
+                    return "(%s)".formatted(result);
+                } catch (InvalidPathException e) {
+                    return "";
+                }
+            });
+
+        }
         @Override
         public String toString() {
             return """
-                    %s:(%s) %s
+                    %s%s: %s
                     
                     %s
                     
                     %s
-                    """.formatted( type, scope, description, body, footers );
+                    """.formatted( type,
+                        sanitizeScope().orElse(""),
+                        description,
+                        ofNullable(body).orElse(""),
+                        ofNullable(footers).orElse("") );
         }
     }
 
@@ -125,7 +158,8 @@ public interface CommitAgent {
 
         @Override
         public CompletableFuture<Map<String, Object>> apply(State state, RunnableConfig config) {
-
+            final var useJsonOutput = config.metadata("USE_JSON_OUTPUT")
+                                        .map( v -> (Boolean)v ).orElse(false);
             final var lastMessage = state.lastMessage();
 
             if( lastMessage.isEmpty() ) {
@@ -149,18 +183,33 @@ public interface CommitAgent {
                             .build();
                 }
 
-                var response = chatClient.prompt()
-                        .messages( message )
-                        .call()
-                        //.entity( CommitOutput.class )
-                        .chatResponse()
-                        ;
+                if( useJsonOutput ) {
+                    final var response = chatClient.prompt()
+                            .messages( message )
+                            .call()
+                            .entity( CommitOutput.class )
+                            ;
 
-                if( response == null ) {
-                    return failedFuture( new IllegalStateException("No response provided") );
+                    if( response == null ) {
+                        return failedFuture( new IllegalStateException("No response provided") );
+                    }
+                    return completedFuture(Map.of( State.COMMIT_DESCRIPTION, response.toString() ));
+
                 }
-                return completedFuture(Map.of( State.COMMIT_DESCRIPTION, ofNullable(response.getResult().getOutput().getText()).orElseThrow() ));
-                //return completedFuture(Map.of( State.COMMIT_DESCRIPTION, response.toString() ));
+                else  {
+                    final var response = chatClient.prompt()
+                            .messages( message )
+                            .call()
+                            .chatResponse()
+                            ;
+
+                    if( response == null ) {
+                        return failedFuture( new IllegalStateException("No response provided") );
+                    }
+
+                    return completedFuture(Map.of( State.COMMIT_DESCRIPTION, ofNullable(response.getResult().getOutput().getText()).orElseThrow() ));
+
+                }
             }
 
             return failedFuture( new IllegalStateException("No user message provided"));
