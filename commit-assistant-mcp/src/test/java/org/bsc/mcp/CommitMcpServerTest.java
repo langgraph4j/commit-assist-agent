@@ -42,7 +42,7 @@ public class CommitMcpServerTest {
 
         final var clientTransport = new InMemoryClientTransport(transport);
 
-        System.setProperty("CWD", "/tmp/test");
+        System.setProperty("CWD", ".");
 
         mcpClient = McpClient.sync( clientTransport )
                 .loggingConsumer(System.out::println)
