@@ -61,12 +61,19 @@ public final class CommitMcpServer {
             new McpSchema.ToolAnnotations(null, true, false, true, true, null);
 
     private final BiFunction<String,String,String>  conventionalCommitPrompt = """
-            Generate a git conventional commit message that summarizes the changes in <GIT_DIFF> following the rules below:
+            As a senior software engineer performing a rigorous code review.
+            Analyze the provided <GIT_DIFF> output and produce a structured, technically precise evaluation for
+            generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>
             
-            1. The result MUST be in plain text format.
-            2. The result MUST not be in markdown format.
-            3. The result MUST not be surrounded by quotes or code blocks.
-            4. The result MUST be compliant with <CONVENTIONAL_COMMIT_SPEC>.
+            The diff represents changes between two commits.
+            Lines prefixed with:
+            + were added
+            - were removed
+            no prefix = context
+            
+            you must following the rules below:
+            * The result MUST be in plain text format avoid markdown format at all.
+            * The result MUST not be surrounded by quotes or code blocks.
             
             <GIT_DIFF>
             %s
@@ -78,12 +85,19 @@ public final class CommitMcpServer {
             """::formatted;
 
     private final Function<String,String>  conventionalCommitPromptWithTools = """
-            Generate a git message following the conventional commit specification <CONVENTIONAL_COMMIT_SPEC> to summarize the changes in <GIT_DIFF> following the rules below:
+            As a senior software engineer performing a rigorous code review.
+            Use the 'diff' tool to get <GIT_DIFF>, analyze output and produce a structured, technically precise evaluation for
+            generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>
             
-            * you must use tool 'diff' to achieve <GIT_DIFF>
-            * The result MUST be in plain text format no markdown is allowed.
+            The diff represents changes between two commits.
+            Lines prefixed with:
+            + were added
+            - were removed
+            no prefix = context
+            
+            you must following the rules below:
+            * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
-            * The result MUST be compliant with <CONVENTIONAL_COMMIT_SPEC>.
             
             <CONVENTIONAL_COMMIT_SPEC>
             %s
