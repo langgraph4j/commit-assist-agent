@@ -10,12 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class MCPTest {
 
-    static McpGitAssistant mcpGitClient;
+    static McpGitAssistantClient mcpGitClient;
 
     @BeforeAll
     public static void setup() throws Exception {
 
-        mcpGitClient = McpGitAssistant.builder()
+        mcpGitClient = McpGitAssistantClient.builder()
                 .mcpPath( Path.of(".") )
                 .repositoryPath( Path.of( "/","tmp", "test") )
                 .build( spec ->
