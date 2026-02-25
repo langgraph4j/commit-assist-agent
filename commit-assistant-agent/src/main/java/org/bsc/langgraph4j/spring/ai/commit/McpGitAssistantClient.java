@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 
-public class McpGitAssistant {
+public class McpGitAssistantClient {
     public final McpAsyncClient delegate;
 
     final static class InMemoryClientTransportForMcpCommitAssistant extends InMemoryClientTransport {
@@ -55,7 +55,7 @@ public class McpGitAssistant {
             return this;
         }
 
-        McpGitAssistant buildExternal(Function<McpClient.AsyncSpec, McpAsyncClient> builder ) {
+        McpGitAssistantClient buildExternal(Function<McpClient.AsyncSpec, McpAsyncClient> builder ) {
 
             requireNonNull( mcpPath, "repositoryPath cannot be null");
             requireNonNull( repositoryPath, "repositoryPath cannot be null");
@@ -68,11 +68,11 @@ public class McpGitAssistant {
                     .env(Map.of("CWD", repositoryPath.toAbsolutePath().toString()))
                     .build();
             final var asyncSpec = McpClient.async(new StdioClientTransport(stdioParams, McpJsonMapper.createDefault()));
-            return new McpGitAssistant( builder.apply( asyncSpec ) );
+            return new McpGitAssistantClient( builder.apply( asyncSpec ) );
 
         }
 
-        McpGitAssistant build(Function<McpClient.AsyncSpec, McpAsyncClient> builder ) {
+        McpGitAssistantClient build(Function<McpClient.AsyncSpec, McpAsyncClient> builder ) {
 
             requireNonNull( mcpPath, "repositoryPath cannot be null");
             requireNonNull( repositoryPath, "repositoryPath cannot be null");
@@ -80,7 +80,7 @@ public class McpGitAssistant {
 
             final var asyncSpec = McpClient.async(new InMemoryClientTransportForMcpCommitAssistant(repositoryPath));
 
-            return new McpGitAssistant( builder.apply( asyncSpec ) );
+            return new McpGitAssistantClient( builder.apply( asyncSpec ) );
 
         }
     }
@@ -89,7 +89,7 @@ public class McpGitAssistant {
         return new Builder();
     }
 
-    private McpGitAssistant(McpAsyncClient mcpAsyncClient) {
+    private McpGitAssistantClient(McpAsyncClient mcpAsyncClient) {
         this.delegate = requireNonNull(mcpAsyncClient, "mcpAsyncClient cannot be null");
     }
 
@@ -151,13 +151,13 @@ public class McpGitAssistant {
         return futureResult;
     }
 
-    public CompletableFuture<Void> commit( String  message, String filename ) {
+    public CompletableFuture<Void> commit( String  message, String filename, boolean staged ) {
         final var futureResult = new CompletableFuture<Void>();
 
         delegate.initialize().flatMap( init ->
             delegate.callTool(new McpSchema.CallToolRequest(
                     "commit",
-                    Map.of("message", message, "filename", filename))))
+                    Map.of("message", message, "filename", filename, "staged", staged))))
                     .subscribe( result ->
                             futureResult.complete( null ),
                             futureResult::completeExceptionally );
