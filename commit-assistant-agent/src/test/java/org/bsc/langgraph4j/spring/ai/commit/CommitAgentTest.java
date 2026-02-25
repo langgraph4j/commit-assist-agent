@@ -4,6 +4,7 @@ import org.bsc.langgraph4j.*;
 import org.bsc.langgraph4j.spring.ai.AiModel;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,7 +45,7 @@ public class CommitAgentTest {
 
             assertNotNull(result);
 
-            input = GraphInput.resume();
+            input = GraphInput.resume( Map.of(CommitAgent.State.COMMIT_DESCRIPTION, "TEST") );
 
             System.out.printf( "commit description %n%s%n", output.state().commitDescription().orElse("no description") );
 
