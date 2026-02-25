@@ -90,6 +90,21 @@
                         </configuration>
                     </execution>
                     <execution>
+                        <id>cli-dbg</id>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>java</executable>
+                            <arguments>
+                                <argument>-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005</argument>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>org.bsc.langgraph4j.spring.ai.commit.CLI</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>tui-test</id>
                         <goals>
                             <goal>java</goal>
