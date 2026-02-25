@@ -130,9 +130,9 @@ public interface CommitAgent {
 
     class RetrieveCommitPrompt implements AsyncNodeActionWithConfig<State> {
 
-        private final McpGitAssistant mcpGitAssistant;
+        private final McpGitAssistantClient mcpGitAssistant;
 
-        public RetrieveCommitPrompt(McpGitAssistant mcpGitAssistant) {
+        public RetrieveCommitPrompt(McpGitAssistantClient mcpGitAssistant) {
             this.mcpGitAssistant = requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
 
         }
@@ -146,11 +146,11 @@ public interface CommitAgent {
 
     class ProcessCommitDescriptionWithTools implements AsyncNodeActionWithConfig<State> {
 
-        private final McpGitAssistant mcpGitAssistant;
+        private final McpGitAssistantClient mcpGitAssistant;
         private final ChatModel chatModel;
         private ChatClient chatClient;
 
-        public ProcessCommitDescriptionWithTools(ChatModel chatModel, McpGitAssistant mcpGitAssistant) {
+        public ProcessCommitDescriptionWithTools(ChatModel chatModel, McpGitAssistantClient mcpGitAssistant) {
             this.mcpGitAssistant = requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
             this.chatModel = requireNonNull( chatModel, "chatModel cannot be null");
 
@@ -216,7 +216,7 @@ public interface CommitAgent {
         }
     }
 
-    static AsyncNodeActionWithConfig<State> filesToCommit(McpGitAssistant mcpGitAssistant, boolean staged ) {
+    static AsyncNodeActionWithConfig<State> filesToCommit(McpGitAssistantClient mcpGitAssistant, boolean staged ) {
         requireNonNull(mcpGitAssistant, "mcpGitAssistant cannot be null");
         return (state, config) -> mcpGitAssistant.listFiles(staged)
                 .thenApply( files -> Map.of( State.FILES, files ) )
@@ -239,12 +239,12 @@ public interface CommitAgent {
         });
     }
 
-    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistant mcpGitAssistant ) {
+    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged ) {
         requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
         return (state, config) ->
             state.commitDescription().flatMap( description ->
                         state.fileToCommit().map( file ->
-                                        mcpGitAssistant.commit(description, file)
+                                        mcpGitAssistant.commit(description, file, staged)
                                         .thenApply( files -> Map.<String,Object>of(
                                                 State.FILES, state.filesToCommit$removeFirst() ))))
                                     .orElse( completedFuture( Map.of() ));
@@ -299,7 +299,7 @@ public interface CommitAgent {
             //stateSerializer = new SpringAIJacksonStateSerializer<>(State::new);
 
         }
-        private CompiledGraph<State> generateCommitAgent( McpGitAssistant mcpGitAssistant ) throws GraphStateException {
+        private CompiledGraph<State> generateCommitAgent( McpGitAssistantClient mcpGitAssistant ) throws GraphStateException {
 
             final var compileConfig = CompileConfig.builder().build();
 
@@ -328,7 +328,7 @@ public interface CommitAgent {
             final var loggingConsumer = ofNullable(this.loggingConsumer)
                     .orElseGet( () -> notification -> {} );
 
-            final var mcpGitAssistant = McpGitAssistant.builder()
+            final var mcpGitAssistant = McpGitAssistantClient.builder()
                     .mcpPath( Path.of(".") )
                     .repositoryPath( requireNonNull(repositoryPath, "repositoryPath cannot be null") )
                     .build( spec ->
@@ -350,7 +350,7 @@ public interface CommitAgent {
                     .addNode( "generate_commit_message", generateCommitAgent( mcpGitAssistant) )
                     // fix when the interruption is after a subgraph move out from the subgraph
                     .addNode( "verify_commit_message", AsyncNodeActionWithConfig.noop() )
-                    .addNode( "execute_commit", executeCommit(mcpGitAssistant) )
+                    .addNode( "execute_commit", executeCommit(mcpGitAssistant, staged ) )
                     .addAfterCallNodeHook( "execute_commit", removeAttribute(State.MESSAGES_STATE))
                     .addNode( "next_file_to_commit",
                             nextFileToCommit( staged ),
