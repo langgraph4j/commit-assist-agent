@@ -21,16 +21,75 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Optional.ofNullable;
 
 public class CLI implements Closeable {
 
-    static final class TextEditor {
+    public static final class TextEditor extends Panel {
+
+        public static class Builder {
+            private TerminalSize terminalSize;
+            private String initialValue;
+            private Runnable onClose;
+
+            public Builder terminalSize( TerminalSize terminalSize ) {
+                this.terminalSize = terminalSize;
+                return this;
+            }
+
+            public Builder initialValue( String initialValue ) {
+                this.initialValue = initialValue;
+                return this;
+            }
+
+            public Builder onClose( Runnable onClose ) {
+                this.onClose = onClose;
+                return this;
+            }
+
+            public TextEditor build() {
+                requireNonNull(onClose, "onClose handler cannot be null");
+                requireNonNull(terminalSize, "terminalSize cannot be null");
+
+                return new TextEditor( this );
+            }
+        }
+
+        public static Builder builder() {
+            return new Builder();
+        }
 
         final TextBox textBox;
         String initValue;
 
-        public TextEditor(TextBox textBox) {
-            this.textBox = textBox;
+        private TextEditor( Builder builder ) {
+            super( new LinearLayout(Direction.VERTICAL) );
+
+            this.initValue = ofNullable(builder.initialValue).orElse("");
+
+            final var buttons = new Panel(new LinearLayout(Direction.HORIZONTAL))
+                    .addComponent(new Button("Commit", builder.onClose))
+                    .addComponent(new Button("Undo", () -> {
+                        setText( getInitialValue() );
+                    }))
+                    .addComponent(new Button("Skip", () -> {
+                        setText("");
+                        builder.onClose.run();
+                    }));
+
+            final var textBoxSize = builder.terminalSize
+                    .withColumns(builder.terminalSize.getColumns() - 5)
+                    .withRows( builder.terminalSize.getRows() - 5 )
+                    ;
+
+            this.textBox = new TextBox(textBoxSize, this.initValue)
+                    .setVerticalFocusSwitching(true)
+                    .setReadOnly(false);
+
+            this.addComponent(textBox)
+                    .addComponent(new Separator(Direction.HORIZONTAL))
+                    .addComponent(buttons);
+
         }
 
         public void setInitValue(String initValue) {
@@ -51,25 +110,32 @@ public class CLI implements Closeable {
         }
     }
 
-    static final class WaitingDialogHolder {
-        final WaitingDialog delegate;
-        final Label label;
+    record WaitingDialogHolder(WaitingDialog delegate, Label label)  {
 
-        public static WaitingDialogHolder of( String title, String text ) {
-            final var dialog = WaitingDialog.createDialog(title, text);
-            return new WaitingDialogHolder(dialog);
-        }
-
-        private WaitingDialogHolder(WaitingDialog dialog) {
-            this.delegate = dialog;
+        public static WaitingDialogHolder of(String title, String text) {
+            final var dialog = WaitingDialog.createDialog(title, text);;
 
             final var panel = (Panel)dialog.getComponent();
 
-            label = (Label)panel.getChildren()
+            final var label = (Label)panel.getChildren()
                     .stream()
                     .filter( c -> c instanceof Label)
                     .findFirst()
                     .orElseThrow();
+            return new WaitingDialogHolder(dialog, label);
+        }
+
+        public void open(MultiWindowTextGUI gui ) {
+            delegate.showDialog(gui, true);
+        }
+
+        public void close() {
+            delegate.close();
+        }
+
+        public void clear() {
+            delegate.setTitle( "Commit Agent" );
+            label.setText("");
         }
 
         public void  updateFromOutput( NodeOutput<CommitAgent.State> output ) {
@@ -82,29 +148,38 @@ public class CLI implements Closeable {
             label.setText( "executing step: [%s] .....".formatted( output.node() ));
         }
 
-        public void  updateFromMcpNotification( McpSchema.LoggingMessageNotification notification ) {
-            label.setText( "Mcp[%s]: %s  ".formatted( notification.level().name(), notification.data() ));
+        public void  updateFromMcpNotification( McpSchema.LoggingMessageNotification notification, TerminalSize size ) {
+            label.setText( "Mcp[%s]: %s  ".formatted( notification.level().name(),
+                    ellipsis(notification.data(), size.getColumns()-20) ));
         }
     }
 
     private final TerminalScreen screen;
     private final MultiWindowTextGUI gui;
     private final AtomicReference<WaitingDialogHolder> dialogHolder = new AtomicReference<>();
-    private final WaitingDialogHolder dialog;
+    private final WaitingDialogHolder waitingDialog;
     private final BasicWindow window;
+    private final TextEditor textEditor;
 
     public CLI() throws IOException {
         this.screen = new DefaultTerminalFactory()
                 .setMouseCaptureMode( MouseCaptureMode.CLICK_RELEASE_DRAG_MOVE )
                 .createScreen();
 
-        dialog = WaitingDialogHolder.of("Commit Agent", "process");
+        this.waitingDialog = WaitingDialogHolder.of("Commit Agent", "process");
 
         this.screen.startScreen();
 
         this.gui = new MultiWindowTextGUI(screen);
 
         this.window = new BasicWindow("Commit Description " );
+
+        this.textEditor = TextEditor.builder()
+                .terminalSize( screen.getTerminalSize() )
+                .onClose(window::close)
+                .build();
+        this.window.setComponent(textEditor);
+
 
     }
 
@@ -117,17 +192,33 @@ public class CLI implements Closeable {
         stop();
     }
 
+    private static String ellipsis(String value, int size) {
+        if (value == null || size <= 0) {
+            return "";
+        }
+        if (value.length() <= size) {
+            return value;
+        }
+        if (size <= 3) {
+            return ".".repeat(size);
+        }
+        return value.substring(0, size - 3).concat( "...");
+    }
+
+
     private void mainLoop( CompiledGraph<CommitAgent.State> agent,
                            Function<String,Optional<String>> textConfirmation) throws Exception {
 
         final var config = RunnableConfig.builder()
-                .addMetadata( "USE_JSON_OUTPUT", true)
+                .addMetadata( "USE_JSON_OUTPUT", false)
                 .build();
 
         var input = GraphInput.noArgs();
         NodeOutput<CommitAgent.State> output;
 
         do {
+
+            waitingDialog.clear();
 
             final AtomicReference<NodeOutput<CommitAgent.State>> outputHolder =
                     new AtomicReference<>(null);
@@ -136,7 +227,7 @@ public class CLI implements Closeable {
                 // System.out.printf("reduce thread %s%n", Thread.currentThread().getName());
                 gui.getGUIThread().invokeLater( () -> {
 
-                    dialog.updateFromOutput(b);
+                    waitingDialog.updateFromOutput(b);
 
                     b.state().fileToCommit().ifPresentOrElse( file ->
                                     window.setTitle( "Commit Description [%s]".formatted( file )),
@@ -152,85 +243,59 @@ public class CLI implements Closeable {
                 return a;
             }).thenApply( (a) -> {
                 // System.out.printf("reduce.apply thread %s%n", Thread.currentThread().getName());
-                gui.getGUIThread().invokeLater(dialog.delegate::close);
-                return Optional.ofNullable(a.get());
+                gui.getGUIThread().invokeLater(waitingDialog::close);
+                return ofNullable(a.get());
             });
 
-            dialog.delegate.showDialog( gui, true);
+            waitingDialog.open( gui );
 
-            final var optionalOutput = futureOutput.join();
+            output = futureOutput.join().orElseThrow();
 
-            output = optionalOutput.orElseThrow();
+            if(output.isEND()) break;
 
             final var resumeData = output.state().commitDescription()
                     .flatMap(textConfirmation)
-                    .map( text -> Map.<String,Object>of(CommitAgent.State.COMMIT_DESCRIPTION, text ))
-                    .orElse( Map.of() );
+                    .map(text -> Map.<String, Object>of(CommitAgent.State.COMMIT_DESCRIPTION, text))
+                    .orElse(Map.of());
 
-            input = GraphInput.resume( resumeData );
+            input = GraphInput.resume(resumeData);
 
         } while( !output.isEND() );
     }
 
     public void run( String[] args ) throws Exception {
 
-        final var terminalSize = screen.getTerminalSize();
-
         gui.setTheme(new SimpleTheme(
                 TextColor.ANSI.WHITE,
                 TextColor.ANSI.BLACK));
 
 
-        final var  panel = new Panel(new LinearLayout(Direction.VERTICAL));
-
-        final var editor = new TextEditor(
-                new TextBox(new TerminalSize(terminalSize.getColumns()-4, 5), "")
-                        .setVerticalFocusSwitching(true)
-                        .setReadOnly(false));
-
-        final var buttons = new Panel(new LinearLayout(Direction.HORIZONTAL))
-                        .addComponent(new Button("Save", window::close))
-                        .addComponent(new Button("Cancel", () -> {
-                            editor.setText( editor.getInitialValue() );
-                            window.close();
-                        }))
-                        .addComponent(new Button("Skip", () -> {
-                            editor.setText("");
-                            window.close();
-                        }));
-        panel.addComponent(editor.textBox)
-                .addComponent(buttons);
-        window.setComponent(panel);
-
         final var repositoryPath = ( args.length > 0 ) ?
                 Path.of( args[0] ):
                 Path.of( "." );
 
-        final var staged = args.length >= 1 && Boolean.parseBoolean(args[1]);
+        final var staged = true; //args.length >= 1 && Boolean.parseBoolean(args[1]);
 
         final var agent = CommitAgent.builder()
                 //.chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
                 .chatModel( AiModel.OLLAMA.chatModel("qwen3"))
                 .repositoryPath( repositoryPath )
                 .staged( staged )
-                .loggingConsumer(dialog::updateFromMcpNotification)
+                .loggingConsumer( n -> waitingDialog.updateFromMcpNotification( n, screen.getTerminalSize() ) )
                 .build();
 
         mainLoop(agent, (text) -> {
 
-            editor.setInitValue(text);
+            textEditor.setInitValue(text);
 
             gui.addWindowAndWait(window);
 
-            final var updatedText = editor.getText();
+            final var updatedText = textEditor.getText();
 
             return updatedText.isBlank() ?
                     Optional.empty() :
                     Optional.of(updatedText);
         });
-
-
-        screen.stopScreen();
 
     }
 
