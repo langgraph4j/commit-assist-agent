@@ -74,6 +74,7 @@ public final class CommitMcpServer {
             you must following the rules below:
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
+            * The result MUST be in English language
             
             <GIT_DIFF>
             %s
@@ -96,8 +97,10 @@ public final class CommitMcpServer {
             no prefix = context
             
             you must following the rules below:
+            * The identified scope MUST be rewrite without any path and extension.
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
+            * The result MUST be in English language
             
             <CONVENTIONAL_COMMIT_SPEC>
             %s
@@ -200,10 +203,12 @@ public final class CommitMcpServer {
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["message", "filename"],
+                  "required": ["message", "filename", "staged"],
                   "properties": {
                     "message": { "type": "string", "minLength": 1, "description": "Commit message" },
-                    "filename": { "type": "string", "minLength": 1, "description": "File to commit" }
+                    "filename": { "type": "string", "minLength": 1, "description": "File to commit" },
+                    "staged": { "type": "boolean" }
+
                   }
                 }
                 """;
@@ -229,19 +234,26 @@ public final class CommitMcpServer {
                 .tool(tool)
                 .callHandler((exchange, request) -> {
                     try {
-                        var arguments = request.arguments() == null ? Map.<String, Object>of() : request.arguments();
-                        var message = requiredString(arguments, "message");
-                        var filename = requiredString(arguments, "filename");
+                        var message = requiredString(request.arguments(), "message");
+                        var filename = requiredString(request.arguments(), "filename");
+                        var staged = requiredBoolean(request.arguments(), "staged");
 
-                        log(exchange, McpSchema.LoggingLevel.INFO,
-                                "Committing file %s with message: %s".formatted(filename, message));
+                        final var outputFuture = (staged) ?
+                                runGit(exchange, "commit", "-m", message, filename) :
+                                runGit(exchange, "status", "-am", message, filename);
 
-                            // Keep behavior equivalent to server.ts where commit execution is currently disabled.
-                        final var result  =  Map.<String, Object>of("filename", filename );
-                        return McpSchema.CallToolResult.builder()
-                                .structuredContent(result)
-                                .isError(false)
-                                .build();
+                        return outputFuture.thenApply( output -> {
+                            var result = Map.<String, Object>of(
+                                    "staged", staged,
+                                    "filename", filename,
+                                    "diff", output
+                            );
+
+                            return McpSchema.CallToolResult.builder()
+                                    .structuredContent(result)
+                                    .isError(false)
+                                    .build();
+                        }).get();
 
                     } catch (Exception e) {
                         return errorResult(e);
