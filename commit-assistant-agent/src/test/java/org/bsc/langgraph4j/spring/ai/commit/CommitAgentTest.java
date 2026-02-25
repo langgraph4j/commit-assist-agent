@@ -14,13 +14,17 @@ public class CommitAgentTest {
     public static void main( String[] args) throws Exception {
 
         final var agent = CommitAgent.builder()
-                .chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
-                .repositoryPath( Path.of( "/Users/bsorrentino/WORKSPACES/GITHUB.langgraph4j/langgraph4j" ))
+                .chatModel( AiModel.OLLAMA.chatModel("qwen3"))
+                .repositoryPath( Path.of( "/Users/bsorrentino/WORKSPACES/GITHUB.langgraph4j/langgraph4j-commit-assistant-springai" ))
+                .staged( false )
+                .loggingConsumer(System.out::println)
                 .build();
 
         // System.out.println(agent.getGraph( GraphRepresentation.Type.MERMAID, "", false).content());
 
-        final var config = RunnableConfig.builder().build();
+        final var config = RunnableConfig.builder()
+                .addMetadata( "USE_JSON_OUTPUT", false)
+                .build();
 
         GraphInput input = GraphInput.noArgs();
         NodeOutput<CommitAgent.State> output;
@@ -42,7 +46,11 @@ public class CommitAgentTest {
 
             input = GraphInput.resume();
 
+            System.out.printf( "commit description %n%s%n", output.state().commitDescription().orElse("no description") );
+
         } while( !output.isEND() );
+
+        System.out.printf( "commit description %n%s%n", output.state().commitDescription().orElse("no description") );
 
         System.exit(0);
     }
