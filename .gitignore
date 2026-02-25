@@ -10,3 +10,6 @@ target/
 *.iml
 *.iws
 *.ipr
+
+# ai
+.ai/
