@@ -57,7 +57,7 @@
         <dependency>
             <groupId>org.bsc.async</groupId>
             <artifactId>async-generator</artifactId>
-            <version>4.2-SNAPSHOT</version>
+            <version>4.2.0</version>
         </dependency>
         <dependency>
             <groupId>com.googlecode.lanterna</groupId>
