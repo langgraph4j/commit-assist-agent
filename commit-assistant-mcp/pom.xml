@@ -55,7 +55,7 @@
 -->
 
         <dependency>
-            <groupId>org.bsc.mcp</groupId>
+            <groupId>org.bsc.langgraph4j</groupId>
             <artifactId>mcp-inmemory-transport</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
