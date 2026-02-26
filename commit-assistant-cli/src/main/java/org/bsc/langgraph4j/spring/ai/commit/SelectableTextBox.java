@@ -98,14 +98,12 @@ public final class SelectableTextBox extends TextBox {
     @Override
     public synchronized Interactable.Result handleKeyStroke(KeyStroke keyStroke) {
         final var beforeCaret = toPoint(getCaretPosition());
-        final boolean ctrlDown = keyStroke.isCtrlDown();
-        final boolean shiftDown = keyStroke.isShiftDown();
         final var keyType = keyStroke.getKeyType();
 
-        if (ctrlDown && keyType == KeyType.Character && keyStroke.getCharacter() != null) {
-            final char c = Character.toLowerCase(keyStroke.getCharacter());
-            return switch (c) {
-                case 'z' -> {
+        final var shortcut = shortcutKey(keyStroke);
+        if (shortcut.isPresent()) {
+            return switch (shortcut.get()) {
+                case 'u' -> {
                     undo();
                     yield Interactable.Result.HANDLED;
                 }
@@ -284,8 +282,28 @@ public final class SelectableTextBox extends TextBox {
         if (keyStroke.isShiftDown()) {
             return true;
         }
-        return keyStroke.isCtrlDown() && keyStroke.getKeyType() == KeyType.Character && keyStroke.getCharacter() != null
-                && Character.toLowerCase(keyStroke.getCharacter()) == 'a';
+        return shortcutKey(keyStroke)
+                .map(c -> c == 'a')
+                .orElse(false);
+    }
+
+    private Optional<Character> shortcutKey(KeyStroke keyStroke) {
+        if (keyStroke.getKeyType() != KeyType.Character || keyStroke.getCharacter() == null) {
+            return Optional.empty();
+        }
+        final char c = keyStroke.getCharacter();
+
+        if (keyStroke.isCtrlDown()) {
+            return Optional.of(Character.toLowerCase(c));
+        }
+
+        // Some terminals deliver Ctrl+[A-Z] as ASCII control characters (1..26)
+        // instead of setting ctrlDown=true.
+        if (c >= 1 && c <= 26) {
+            return Optional.of((char) ('a' + (c - 1)));
+        }
+
+        return Optional.empty();
     }
 
     private boolean deleteSelection() {
