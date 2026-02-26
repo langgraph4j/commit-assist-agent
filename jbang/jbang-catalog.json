@@ -1,0 +1,8 @@
+{
+  "aliases": {
+    "commit-assistant": {
+      "script-ref": "./jbang/CommitAssistant.java",
+      "description": "TUI commit assistant (Lanterna) for staged changes"
+    }
+  }
+}
