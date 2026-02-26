@@ -103,7 +103,8 @@ public final class SelectableTextBox extends TextBox {
         final var shortcut = shortcutKey(keyStroke);
         if (shortcut.isPresent()) {
             return switch (shortcut.get()) {
-                case 'u' -> {
+/*
+                case 'z' -> {
                     undo();
                     yield Interactable.Result.HANDLED;
                 }
@@ -123,6 +124,7 @@ public final class SelectableTextBox extends TextBox {
                     pasteClipboard();
                     yield Interactable.Result.HANDLED;
                 }
+ */
                 default -> super.handleKeyStroke(keyStroke);
             };
         }
@@ -160,7 +162,7 @@ public final class SelectableTextBox extends TextBox {
         return result;
     }
 
-    private void undo() {
+    public void undo() {
         super.setText(initialValue);
     }
 
