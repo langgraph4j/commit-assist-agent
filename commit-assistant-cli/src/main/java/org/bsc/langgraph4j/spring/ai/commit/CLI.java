@@ -11,6 +11,7 @@ import com.googlecode.lanterna.terminal.MouseCaptureMode;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.bsc.langgraph4j.*;
 import org.bsc.langgraph4j.spring.ai.AiModel;
+import org.bsc.langgraph4j.state.AgentState;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -172,7 +173,7 @@ public class CLI implements Closeable {
             final var resumeData = output.state().commitDescription()
                     .flatMap(textConfirmation)
                     .map(text -> Map.<String, Object>of(CommitAgent.State.COMMIT_DESCRIPTION, text))
-                    .orElse(Map.of());
+                    .orElse(Map.of(CommitAgent.State.COMMIT_DESCRIPTION, AgentState.MARK_FOR_REMOVAL));
 
             input = GraphInput.resume(resumeData);
 
