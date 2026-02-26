@@ -89,7 +89,7 @@ public final class CommitMcpServer {
             As a senior software engineer performing a rigorous code review.
             Use the 'diff' tool to get <GIT_DIFF>, analyze output and produce a structured, technically precise evaluation for
             generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>.
-            You are just an assistant to generate commit message, MUST not execute commit.
+            
             
             The diff represents changes between two commits.
             Lines prefixed with:
@@ -98,6 +98,7 @@ public final class CommitMcpServer {
             no prefix = context
             
             you must following the rules below:
+            * Your job is just to generate commit message, you MUST not execute commit at all.
             * The identified scope MUST be rewrite without any path and extension.
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
