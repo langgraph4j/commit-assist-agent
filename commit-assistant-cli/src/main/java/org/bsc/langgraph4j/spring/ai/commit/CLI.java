@@ -26,6 +26,14 @@ import static java.util.Optional.ofNullable;
 
 public class CLI implements Closeable {
 
+    private static void printUsage() {
+        System.out.println("""
+    Usage: <app>
+    [--path=<repo>] [-p=<repo>]                 # repository path, default current folder
+    [--staged=<true|false>] [-s=<true|false>]   # consider staged/unstaged files, default true
+    [--model=<name>] [-m=<name>]                # ollama model name, default qwen3
+    """);
+    }
 
     record WaitingDialogHolder(WaitingDialog delegate, Label label)  {
 
@@ -181,21 +189,33 @@ public class CLI implements Closeable {
     }
 
     public void run( String[] args ) throws Exception {
+        final var commandLine = CommandLine.parse(args);
+
+        if (commandLine.flag("help", 'h')) {
+            printUsage();
+            return;
+        }
 
         gui.setTheme(new SimpleTheme(
                 TextColor.ANSI.WHITE,
                 TextColor.ANSI.BLACK));
 
 
-        final var repositoryPath = ( args.length > 0 ) ?
-                Path.of( args[0] ):
-                Path.of( "." );
+        final var repositoryPath = commandLine.option("path", 'p')
+                .or(() -> commandLine.positionals().stream().findFirst())
+                .map(Path::of)
+                .orElse(Path.of("."));
 
-        final var staged = true; //args.length >= 1 && Boolean.parseBoolean(args[1]);
+        final var staged = commandLine.option("staged", 's')
+                .flatMap(CommandLine::booleanOption)
+                .orElse(true);
+
+        final var modelName = commandLine.option("model", 'm')
+                .orElse("qwen3");
 
         final var agent = CommitAgent.builder()
                 //.chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
-                .chatModel( AiModel.OLLAMA.chatModel("qwen3"))
+                .chatModel( AiModel.OLLAMA.chatModel(modelName))
                 .repositoryPath( repositoryPath )
                 .staged( staged )
                 .loggingConsumer( n -> waitingDialog.updateFromMcpNotification( n, screen.getTerminalSize() ) )
