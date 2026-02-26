@@ -70,10 +70,23 @@ public final class SelectableTextBox extends TextBox {
     private TextEditor.TextPoint selectionAnchor;
     private TextEditor.TextPoint selectionCaret;
     private String clipboard = "";
+    private String initialValue;
 
     SelectableTextBox(TerminalSize size, String initialValue) {
         super(size, initialValue);
+        this.initialValue = initialValue;
         setRenderer(new Renderer());
+    }
+
+
+    public void setInitialValue(String initialValue) {
+        this.initialValue = initialValue;
+        setText(initialValue);
+    }
+
+
+    public String getInitialValue() {
+        return initialValue;
     }
 
     @Override
@@ -92,6 +105,10 @@ public final class SelectableTextBox extends TextBox {
         if (ctrlDown && keyType == KeyType.Character && keyStroke.getCharacter() != null) {
             final char c = Character.toLowerCase(keyStroke.getCharacter());
             return switch (c) {
+                case 'z' -> {
+                    undo();
+                    yield Interactable.Result.HANDLED;
+                }
                 case 'a' -> {
                     selectAll();
                     yield Interactable.Result.HANDLED;
@@ -143,6 +160,10 @@ public final class SelectableTextBox extends TextBox {
             clearSelection();
         }
         return result;
+    }
+
+    private void undo() {
+        super.setText(initialValue);
     }
 
     synchronized void selectAll() {
