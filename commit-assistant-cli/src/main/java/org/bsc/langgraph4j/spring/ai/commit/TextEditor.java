@@ -45,19 +45,18 @@ public final class TextEditor extends Panel {
     }
 
     final SelectableTextBox textBox;
-    String initValue;
 
     private TextEditor( Builder builder ) {
         super( new LinearLayout(Direction.VERTICAL) );
 
-        this.initValue = ofNullable(builder.initialValue).orElse("");
+        final var initValue = ofNullable(builder.initialValue).orElse("");
 
         final var textBoxSize = builder.terminalSize
                 .withColumns(builder.terminalSize.getColumns() - 5)
                 .withRows( builder.terminalSize.getRows() - 5 )
                 ;
 
-        this.textBox = new SelectableTextBox(textBoxSize, this.initValue);
+        this.textBox = new SelectableTextBox(textBoxSize, initValue);
         this.textBox
                 .setVerticalFocusSwitching(true)
                 .setReadOnly(false);
@@ -87,12 +86,11 @@ public final class TextEditor extends Panel {
     }
 
     public void setInitValue(String initValue) {
-        this.initValue = initValue;
-        textBox.setText(initValue);
+        textBox.setInitialValue(initValue);
     }
 
     public String getInitialValue() {
-        return initValue;
+        return textBox.getInitialValue();
     }
 
     public String getText() {
