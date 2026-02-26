@@ -101,6 +101,7 @@ public final class CommitMcpServer {
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
             * The result MUST be in English language
+            * You are just an assistant to generate commit message, MUST not execute commit.
             
             <CONVENTIONAL_COMMIT_SPEC>
             %s
