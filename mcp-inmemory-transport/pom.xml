@@ -4,10 +4,15 @@
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>org.bsc.mcp</groupId>
+	<parent>
+        <groupId>org.bsc.langgraph4j</groupId>
+        <artifactId>langgraph4j-commit-assistant-springai</artifactId>
+        <version>1.0-20260226</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
 	<artifactId>mcp-inmemory-transport</artifactId>
 	<name>Java SDK MCP In-Memory Transport</name>
-	<version>1.0.0-SNAPSHOT</version>
 	<description>In-memory transport implementation for the Model Context Protocol (MCP)</description>
 
 	<properties>

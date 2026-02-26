@@ -88,7 +88,8 @@ public final class CommitMcpServer {
     private final Function<String,String>  conventionalCommitPromptWithTools = """
             As a senior software engineer performing a rigorous code review.
             Use the 'diff' tool to get <GIT_DIFF>, analyze output and produce a structured, technically precise evaluation for
-            generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>
+            generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>.
+            You are just an assistant to generate commit message, MUST not execute commit.
             
             The diff represents changes between two commits.
             Lines prefixed with:
@@ -101,7 +102,7 @@ public final class CommitMcpServer {
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
             * The result MUST be in English language
-            * You are just an assistant to generate commit message, MUST not execute commit.
+            * 
             
             <CONVENTIONAL_COMMIT_SPEC>
             %s
