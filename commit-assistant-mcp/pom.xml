@@ -10,9 +10,7 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>org.bsc.langgraph4j</groupId>
     <artifactId>commit-assistant-mcp</artifactId>
-    <version>1.0-20260226</version>
     <name>commit::assistant::mcp</name>
     <description></description>
 
