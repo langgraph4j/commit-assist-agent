@@ -64,6 +64,11 @@ public final class TextEditor extends Panel {
 
         final var buttons = new Panel(new LinearLayout(Direction.HORIZONTAL))
                 .addComponent(new Button("Commit", builder.onClose))
+                .addComponent(new Button("Skip", () -> {
+                    setText("");
+                    builder.onClose.run();
+                }))
+                .addComponent(new Separator( Direction.VERTICAL ) )
                 .addComponent(new Button("Undo", () -> {
                     setText( getInitialValue() );
                 }))
@@ -72,10 +77,7 @@ public final class TextEditor extends Panel {
                 .addComponent(new Button("Cut", textBox::cutSelection))
                 .addComponent(new Button("Paste", textBox::pasteClipboard))
                 .addComponent(new Button("Delete", textBox::deleteSelectionIfAny))
-                .addComponent(new Button("Skip", () -> {
-                    setText("");
-                    builder.onClose.run();
-                }));
+;
 
 
         this.addComponent(textBox)
