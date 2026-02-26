@@ -87,7 +87,10 @@ public class CLI implements Closeable {
                 }
 
                 if (hasSelection() && isReplacingSelectionStroke(keyStroke)) {
-                    deleteSelection();
+                    final boolean deleted = deleteSelection();
+                    if (deleted && isDeleteOnlyStroke(keyStroke)) {
+                        return Interactable.Result.HANDLED;
+                    }
                 }
 
                 final var result = super.handleKeyStroke(keyStroke);
@@ -209,6 +212,13 @@ public class CLI implements Closeable {
                 }
                 return switch (keyStroke.getKeyType()) {
                     case Character, Backspace, Delete, Enter -> true;
+                    default -> false;
+                };
+            }
+
+            private boolean isDeleteOnlyStroke(KeyStroke keyStroke) {
+                return switch (keyStroke.getKeyType()) {
+                    case Backspace, Delete -> true;
                     default -> false;
                 };
             }
