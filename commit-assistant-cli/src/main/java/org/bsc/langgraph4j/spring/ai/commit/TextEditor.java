@@ -1,6 +1,7 @@
 package org.bsc.langgraph4j.spring.ai.commit;
 
 import com.googlecode.lanterna.TerminalSize;
+import com.googlecode.lanterna.SGR;
 import com.googlecode.lanterna.gui2.*;
 
 import static java.util.Objects.requireNonNull;
@@ -68,14 +69,8 @@ public final class TextEditor extends Panel {
                     builder.onClose.run();
                 }))
                 .addComponent(new Separator( Direction.VERTICAL ) )
-                .addComponent(new Button("Undo", () -> {
-                    setText( getInitialValue() );
-                }))
-                .addComponent(new Button("Select All", textBox::selectAll))
-                .addComponent(new Button("Copy", textBox::copySelection))
-                .addComponent(new Button("Cut", textBox::cutSelection))
-                .addComponent(new Button("Paste", textBox::pasteClipboard))
-                .addComponent(new Button("Delete", textBox::deleteSelectionIfAny))
+                .addComponent(new Label("Ctrl+Z Undo |Ctrl+A Select All | Ctrl+C Copy | Ctrl+X Cut | Ctrl+V Paste")
+                        .addStyle(SGR.ITALIC))
 ;
 
 
@@ -90,7 +85,7 @@ public final class TextEditor extends Panel {
     }
 
     public String getInitialValue() {
-        return textBox.getInitialValue();
+        return textBox. getInitialValue();
     }
 
     public String getText() {
