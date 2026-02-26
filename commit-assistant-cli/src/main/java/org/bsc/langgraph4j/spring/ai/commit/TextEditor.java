@@ -69,10 +69,10 @@ public final class TextEditor extends Panel {
                     builder.onClose.run();
                 }))
                 .addComponent(new Separator( Direction.VERTICAL ) )
-                .addComponent(new Label("Ctrl+c Copy | Ctrl+x Cut | Ctrl+v Paste | Ctrl+u Undo | Ctrl+a Select All")
-                        .addStyle(SGR.ITALIC))
-;
-
+                .addComponent( new Button("Undo", textBox::undo))
+//                .addComponent(new Label("Ctrl+c Copy | Ctrl+x Cut | Ctrl+v Paste | Ctrl+u Undo | Ctrl+a Select All")
+//                        .addStyle(SGR.ITALIC))
+                ;
 
         this.addComponent(textBox)
                 .addComponent(new Separator(Direction.HORIZONTAL))
