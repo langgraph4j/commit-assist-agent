@@ -241,13 +241,13 @@ public interface CommitAgent {
 
     static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged ) {
         requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
-        return (state, config) ->
-            state.commitDescription().flatMap( description ->
-                        state.fileToCommit().map( file ->
-                                        mcpGitAssistant.commit(description, file, staged)
-                                        .thenApply( files -> Map.<String,Object>of(
-                                                State.FILES, state.filesToCommit$removeFirst() ))))
-                                    .orElse( completedFuture( Map.of() ));
+        return (state, config) -> state.commitDescription()
+                .flatMap(description ->
+                    state.fileToCommit().map(file -> mcpGitAssistant.commit(description, file, staged))
+                )
+                .orElseGet(() -> completedFuture(null))
+                .thenApply($1 -> Map.<String, Object>of(
+                        State.FILES, state.filesToCommit$removeFirst()));
     }
 
     static NodeHook.AfterCall<State> resetAttribute( String attributeKey ) {
@@ -342,6 +342,7 @@ public interface CommitAgent {
             final var compileConfig = CompileConfig.builder()
                     .checkpointSaver( saver )
                     .interruptBefore("execute_commit")
+                    .releaseThread(true)
                     .build();
 
             return new StateGraph<>( State.SCHEMA, stateSerializer)
