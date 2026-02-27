@@ -70,6 +70,9 @@ public final class TextEditor extends Panel {
                 }))
                 .addComponent(new Separator( Direction.VERTICAL ) )
                 .addComponent( new Button("Undo", textBox::undo))
+                .addComponent( new Button("Copy", textBox::copySelection))
+                .addComponent( new Button("Paste", textBox::pasteClipboard))
+
 //                .addComponent(new Label("Ctrl+c Copy | Ctrl+x Cut | Ctrl+v Paste | Ctrl+u Undo | Ctrl+a Select All")
 //                        .addStyle(SGR.ITALIC))
                 ;
