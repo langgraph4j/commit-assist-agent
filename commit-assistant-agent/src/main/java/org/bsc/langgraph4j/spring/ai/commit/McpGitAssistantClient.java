@@ -157,7 +157,7 @@ public class McpGitAssistantClient {
         delegate.initialize().flatMap( init ->
             delegate.callTool(new McpSchema.CallToolRequest(
                     "commit",
-                    Map.of("message", message, "filename", filename, "staged", staged))))
+                    Map.of("message", message, "filename", filename, "staged", staged, "caller", "user"))))
                     .subscribe( result ->
                             futureResult.complete( null ),
                             futureResult::completeExceptionally );
