@@ -145,7 +145,7 @@ public final class CommitMcpServer {
             
             you must following the rules below:
             * Your job is just to generate commit message, you MUST not execute commit at all.
-            * The identified scope MUST be rewrite without any path and extension.
+            * The identified scope MUST be considered without any path and extension.
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
             * The result MUST be in English language
