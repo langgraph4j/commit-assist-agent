@@ -224,6 +224,7 @@ public class CLI implements Closeable {
         mainLoop(agent, (text) -> {
 
             textEditor.setInitValue(text);
+            textEditor.updatePreferredSize( screen );
 
             gui.addWindowAndWait(window);
 
