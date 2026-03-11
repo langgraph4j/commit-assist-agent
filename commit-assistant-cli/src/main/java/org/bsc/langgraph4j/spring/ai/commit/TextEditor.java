@@ -3,6 +3,7 @@ package org.bsc.langgraph4j.spring.ai.commit;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.SGR;
 import com.googlecode.lanterna.gui2.*;
+import com.googlecode.lanterna.screen.Screen;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.Optional.ofNullable;
@@ -52,12 +53,7 @@ public final class TextEditor extends Panel {
 
         final var initValue = ofNullable(builder.initialValue).orElse("");
 
-        final var textBoxSize = builder.terminalSize
-                .withColumns(builder.terminalSize.getColumns() - 5)
-                .withRows( builder.terminalSize.getRows() - 5 )
-                ;
-
-        this.textBox = new SelectableTextBox(textBoxSize, initValue);
+        this.textBox = new SelectableTextBox(textBoxSize(builder.terminalSize), initValue);
         this.textBox
                 .setVerticalFocusSwitching(true)
                 .setReadOnly(false);
@@ -69,17 +65,30 @@ public final class TextEditor extends Panel {
                     builder.onClose.run();
                 }))
                 .addComponent(new Separator( Direction.VERTICAL ) )
-                .addComponent(new Label("Ctrl+Z Undo |Ctrl+A Select All | Ctrl+C Copy | Ctrl+X Cut | Ctrl+V Paste")
-                        .addStyle(SGR.ITALIC))
-;
+                .addComponent( new Button("Undo", textBox::undo))
+                .addComponent( new Button("Copy", textBox::copySelection))
+                .addComponent( new Button("Paste", textBox::pasteClipboard))
 
+//                .addComponent(new Label("Ctrl+c Copy | Ctrl+x Cut | Ctrl+v Paste | Ctrl+u Undo | Ctrl+a Select All")
+//                        .addStyle(SGR.ITALIC))
+                ;
 
         this.addComponent(textBox)
                 .addComponent(new Separator(Direction.HORIZONTAL))
                 .addComponent(buttons);
 
+
     }
 
+    private TerminalSize textBoxSize( TerminalSize terminalSize ) {
+        return terminalSize
+                .withColumns(terminalSize.getColumns() - 5)
+                .withRows( terminalSize.getRows() - 5 )
+                ;
+    }
+    public void updatePreferredSize( Screen screen  ) {
+        textBox.setPreferredSize(textBoxSize(screen.getTerminalSize()));
+    }
     public void setInitValue(String initValue) {
         textBox.setInitialValue(initValue);
     }

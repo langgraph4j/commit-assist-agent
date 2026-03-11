@@ -3,13 +3,16 @@ package org.bsc.mcp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
-import io.modelcontextprotocol.server.*;
+import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpSyncServer;
+import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpServerTransportProvider;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
@@ -18,6 +21,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
@@ -60,6 +64,48 @@ public final class CommitMcpServer {
     private final McpSchema.ToolAnnotations READ_ONLY_ANNOTATIONS =
             new McpSchema.ToolAnnotations(null, true, false, true, true, null);
 
+    static final class CallArgs {
+        final Map<String,Object> arguments;
+
+        public static CallArgs from( McpSchema.CallToolRequest request ) {
+            return new CallArgs(request.arguments());
+        }
+        public static CallArgs from( McpSchema.GetPromptRequest request ) {
+            return new CallArgs(request.arguments());
+        }
+        private CallArgs(Map<String,Object> arguments) {
+            this.arguments = requireNonNull(arguments, "arguments cannot be null");
+        }
+
+        public <T extends Enum<T>> T enumValue( Class<T> enumClass, String key) {
+            return optionalString(key)
+                    .map(s -> Enum.valueOf(enumClass, s))
+                    .orElseThrow( () -> new IllegalArgumentException("%s is required".formatted(key)));
+        }
+
+        public String string( String key ) {
+            return optionalString(key)
+                    .orElseThrow( () -> new IllegalArgumentException("%s is required".formatted(key)));
+        }
+        public boolean bool(String key) {
+            return optionalBool(key)
+                    .orElseThrow( () -> new IllegalArgumentException("%s is required".formatted(key)));
+        }
+
+        public Optional<Boolean> optionalBool(String key) {
+            return optionalString(key)
+                    .map(Boolean::parseBoolean);
+        }
+
+        public Optional<String> optionalString(String key) {
+            return ofNullable(arguments)
+                    .map( arg -> Objects.toString(arg.get(key)));
+
+        }
+
+
+
+    }
     private final BiFunction<String,String,String>  conventionalCommitPrompt = """
             As a senior software engineer performing a rigorous code review.
             Analyze the provided <GIT_DIFF> output and produce a structured, technically precise evaluation for
@@ -89,7 +135,7 @@ public final class CommitMcpServer {
             As a senior software engineer performing a rigorous code review.
             Use the 'diff' tool to get <GIT_DIFF>, analyze output and produce a structured, technically precise evaluation for
             generate a git commit message following the rule of <CONVENTIONAL_COMMIT_SPEC>.
-            You are just an assistant to generate commit message, MUST not execute commit.
+            
             
             The diff represents changes between two commits.
             Lines prefixed with:
@@ -98,11 +144,11 @@ public final class CommitMcpServer {
             no prefix = context
             
             you must following the rules below:
-            * The identified scope MUST be rewrite without any path and extension.
+            * Your job is just to generate commit message, you MUST not execute commit at all.
+            * The identified scope MUST be considered without any path and extension.
             * The result MUST be in plain text format avoid markdown format at all.
             * The result MUST not be surrounded by quotes or code blocks.
             * The result MUST be in English language
-            * 
             
             <CONVENTIONAL_COMMIT_SPEC>
             %s
@@ -173,8 +219,9 @@ public final class CommitMcpServer {
         );
 
         return new McpServerFeatures.SyncPromptSpecification(prompt, (exchange, request) -> {
-            var gitDiff = requiredString(request.arguments(), "GIT_DIFF");
-            var commitSpec = requiredString(request.arguments(), "COMMIT_SPEC");
+            final var callArgs = CallArgs.from(request);
+            var gitDiff = callArgs.string("GIT_DIFF");
+            var commitSpec = callArgs.string("COMMIT_SPEC");
             var text = conventionalCommitPrompt.apply(gitDiff, commitSpec);
 
             return new McpSchema.GetPromptResult(
@@ -200,17 +247,20 @@ public final class CommitMcpServer {
                         ))));
     }
 
+    enum Caller {
+        agent, user
+    }
     private McpServerFeatures.SyncToolSpecification commitTool() {
         final var INPUT_SCHEMA = """
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["message", "filename", "staged"],
+                  "required": ["message", "filename", "staged", "caller"],
                   "properties": {
                     "message": { "type": "string", "minLength": 1, "description": "Commit message" },
                     "filename": { "type": "string", "minLength": 1, "description": "File to commit" },
-                    "staged": { "type": "boolean" }
-
+                    "staged": { "type": "boolean" },
+                    "caller": { "type": "string", "enum": ["agent", "user"], "description": "caller type 'agent', 'user'" }
                   }
                 }
                 """;
@@ -236,9 +286,18 @@ public final class CommitMcpServer {
                 .tool(tool)
                 .callHandler((exchange, request) -> {
                     try {
-                        var message = requiredString(request.arguments(), "message");
-                        var filename = requiredString(request.arguments(), "filename");
-                        var staged = requiredBoolean(request.arguments(), "staged");
+                        final var callArgs = CallArgs.from(request);
+                        var message = callArgs.string( "message");
+                        var filename = callArgs.string("filename");
+                        var staged = callArgs.optionalBool( "staged").orElse(true);
+                        var caller = callArgs.enumValue(Caller.class, "caller");
+
+                        if( caller == Caller.agent ) {
+                            return McpSchema.CallToolResult.builder()
+                                    .addTextContent("commit from agent is forbidden")
+                                    .isError(true)
+                                    .build();
+                        }
 
                         final var outputFuture = (staged) ?
                                 runGit(exchange, "commit", "-m", message, filename) :
@@ -268,7 +327,7 @@ public final class CommitMcpServer {
         final var OUTPUT_SCHEMA = """
                 {
                   "type": "object",
-                  "required": ["staged", "files"],
+                  "required": [ "files", "staged"],
                   "properties": {
                     "staged": { "type": "boolean" },
                     "files": { "type": "array", "items": { "type": "string" } }
@@ -297,7 +356,8 @@ public final class CommitMcpServer {
                 .tool(tool)
                 .callHandler((exchange, request) -> {
                     try {
-                        final var staged = optionalBoolean(request.arguments(), "staged").orElse(false);
+                        final var args = CallArgs.from(request);
+                        final var staged = args.optionalBool("staged").orElse(true);
 
                         final var outputFuture = (staged) ?
                                 runGit(exchange, "diff", "--cached", "--name-only") :
@@ -345,10 +405,10 @@ public final class CommitMcpServer {
         final var  DIFF_OUTPUT_SCHEMA = """
                 {
                   "type": "object",
-                  "required": ["staged", "filename", "diff"],
+                  "required": [ "filename", "staged", "diff"],
                   "properties": {
-                    "staged": { "type": "boolean" },
                     "filename": { "type": "string" },
+                    "staged": { "type": "boolean" },
                     "diff": { "type": "string" }
                   }
                 }
@@ -366,12 +426,14 @@ public final class CommitMcpServer {
                 .tool(tool)
                 .callHandler((exchange, request) -> {
                     try {
-                        var staged = requiredBoolean(request.arguments(), "staged");
-                        var filename = requiredString(request.arguments(), "filename");
+                        final var args = CallArgs.from(request);
+
+                        var staged = args.optionalBool("staged").orElse(true);
+                        var filename = args.string("filename");
 
                         var outputFuture = staged
-                                ? runGit(exchange, "diff", "--cached", "--", filename)
-                                : runGit(exchange, "diff", "--", filename);
+                                ? runGit(exchange, "diff", "--staged", filename)
+                                : runGit(exchange, "diff", filename);
 
                         return outputFuture.thenApply( output -> {
                             var result = Map.<String, Object>of(
@@ -394,22 +456,27 @@ public final class CommitMcpServer {
                 .build();
     }
 
-    private static void log( McpSyncServerExchange exchange, McpSchema.LoggingLevel level, String message) {
+    private static void log(McpSyncServerExchange exchange, McpSchema.LoggingLevel level, String message) {
         exchange.loggingNotification(new McpSchema.LoggingMessageNotification(level, "git-mcp-server", message));
     }
 
-    private static String read(InputStream stream) {
-        try(stream) {
-            return new String(stream.readAllBytes());
-        }
-        catch( IOException ex ) {
-            throw new CompletionException(ex);
-        }
+    private static CompletableFuture<String> readStdout(Process process) {
+        return CompletableFuture.supplyAsync( () -> {
+            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                return reader.lines()
+                        .map(String::stripTrailing)
+                        .filter(line -> !line.isBlank())
+                        .collect(Collectors.joining("\n"));                          // Java 16+
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+        });
     }
 
     private static CompletableFuture<String> runGit(McpSyncServerExchange exchange, String... args) {
         var cwd = ofNullable(System.getenv("CWD"))
-                .orElseGet(() -> System.getProperty("CWD", "."));
+                .orElseGet(() -> System.getProperty("CWD", ""));
 
         var command = new ArrayList<String>();
         command.add("git");
@@ -424,12 +491,9 @@ public final class CommitMcpServer {
 
         try {
 
-            var process = processBuilder.start();
+            final var process = processBuilder.start();
 
-            final var stdoutFuture =
-                    CompletableFuture.supplyAsync(() -> read(process.getInputStream()));
-
-            return process.onExit().thenCombine( stdoutFuture, ( p, stdout ) -> {
+            return process.onExit().thenCombine( readStdout(process), (p, stdout ) -> {
 
                 final var exitCode = p.exitValue();
                 if( exitCode != 0 ) {
@@ -442,7 +506,7 @@ public final class CommitMcpServer {
                 return stdout;
             });
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
     }
@@ -451,7 +515,7 @@ public final class CommitMcpServer {
         return status.lines()
                 .map(CommitMcpServer::parseStatusLine)
                 .filter(s -> !s.isBlank())
-                .toList();
+                .collect(Collectors.toList());
     }
 
     private static String parseStatusLine(String line) {
@@ -474,55 +538,12 @@ public final class CommitMcpServer {
             payload.trim();
     }
 
-    private static McpSchema.CallToolResult successJsonResult(Map<String, Object> payload) throws IOException {
-           return  McpSchema.CallToolResult.builder()
-                    .addTextContent(JSON_MAPPER.writeValueAsString(payload))
-                    .structuredContent(payload)
-                    .isError(false)
-                    .build();
-    }
-
     private McpSchema.CallToolResult errorResult(Exception error) {
         final var rootCause = getRootCause(error);
         return McpSchema.CallToolResult.builder()
                 .addTextContent( ofNullable(rootCause.getMessage()).orElseGet(rootCause::toString))
                 .isError(true)
                 .build();
-    }
-
-    private String requiredString(Map<String,Object> arguments, String key) {
-        final var value = ofNullable(arguments)
-                .map( arg -> arg.get(key))
-                .orElse( null );
-        if (value instanceof String s && !s.isBlank()) {
-            return s;
-        }
-        throw new IllegalArgumentException("%s is required".formatted(key));
-    }
-
-    private boolean requiredBoolean(Map<String,Object> arguments, String key) {
-        final var value = ofNullable(arguments)
-                .map( arg -> arg.get(key))
-                .orElse( null );
-        if( value instanceof Boolean b ) {
-            return b;
-        }
-        throw new IllegalArgumentException("%s is required".formatted(key));
-    }
-
-    private Optional<Boolean> optionalBoolean(Map<String,Object> arguments, String key) {
-        final var value = ofNullable(arguments)
-                            .map( arg -> arg.get(key))
-                            .orElse(null);
-        if (value != null) {
-            if (value instanceof Boolean b) {
-                return Optional.of(b);
-            }
-            if (value instanceof String s) {
-                return Optional.of(Boolean.parseBoolean(s.toLowerCase(Locale.ROOT)));
-            }
-        }
-        return Optional.empty();
     }
 
     private Throwable getRootCause(Throwable throwable) {

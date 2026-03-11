@@ -32,6 +32,7 @@ public class CLI implements Closeable {
     [--path=<repo>] [-p=<repo>]                 # repository path, default current folder
     [--staged=<true|false>] [-s=<true|false>]   # consider staged/unstaged files, default true
     [--model=<name>] [-m=<name>]                # ollama model name, default qwen3
+    [--issue=<#issue>] [-i=<#issue>]            # ref. issue number
     """);
     }
 
@@ -213,17 +214,25 @@ public class CLI implements Closeable {
         final var modelName = commandLine.option("model", 'm')
                 .orElse("qwen3");
 
+        final var issueRef = commandLine.option("issue", 'i')
+                .map(String::strip)
+                .map( issue ->
+                    ( issue.startsWith("#") ) ? issue : "#%s".formatted(issue))
+                .orElse(null);
+
         final var agent = CommitAgent.builder()
                 //.chatModel( AiModel.OLLAMA.chatModel("qwen2.5:7b"))
                 .chatModel( AiModel.OLLAMA.chatModel(modelName))
                 .repositoryPath( repositoryPath )
                 .staged( staged )
+                .issue( issueRef )
                 .loggingConsumer( n -> waitingDialog.updateFromMcpNotification( n, screen.getTerminalSize() ) )
                 .build();
 
         mainLoop(agent, (text) -> {
 
             textEditor.setInitValue(text);
+            textEditor.updatePreferredSize( screen );
 
             gui.addWindowAndWait(window);
 

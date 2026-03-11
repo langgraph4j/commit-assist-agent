@@ -5,7 +5,7 @@
 
     <groupId>org.bsc.langgraph4j</groupId>
     <artifactId>langgraph4j-commit-assistant-springai</artifactId>
-    <version>1.0-20260226</version>
+    <version>1.0-20260311</version>
     <name>langgraph4j::commit::assistant::springai</name>
     <packaging>pom</packaging>
 

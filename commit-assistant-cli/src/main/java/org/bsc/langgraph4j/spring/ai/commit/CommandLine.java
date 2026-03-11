@@ -33,7 +33,7 @@ record CommandLine(Map<String, String> longOptions,
     public static CommandLine parse(String[] args) {
         final var longOptions = new LinkedHashMap<String, String>();
         final var shortOptions = new LinkedHashMap<Character, String>();
-        final var positionals = new ArrayList<String>();
+        final var positional = new ArrayList<String>();
 
         boolean positionalOnly = false;
 
@@ -41,7 +41,7 @@ record CommandLine(Map<String, String> longOptions,
             final String token = args[i];
 
             if (positionalOnly) {
-                positionals.add(token);
+                positional.add(token);
                 continue;
             }
             if ("--".equals(token)) {
@@ -89,10 +89,10 @@ record CommandLine(Map<String, String> longOptions,
             if (token.startsWith("-") && token.length() > 1) {
                 throw new IllegalArgumentException("Short options must use a single character: %s".formatted( token ));
             }
-            positionals.add(token);
+            positional.add(token);
         }
 
-        return new CommandLine(longOptions, shortOptions, positionals);
+        return new CommandLine(longOptions, shortOptions, positional);
     }
 
     public static Optional<Boolean> booleanOption(String value) {

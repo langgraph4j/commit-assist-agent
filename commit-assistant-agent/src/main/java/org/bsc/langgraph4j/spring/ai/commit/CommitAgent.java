@@ -239,12 +239,15 @@ public interface CommitAgent {
         });
     }
 
-    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged ) {
+    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged, String issueRef ) {
         requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
         return (state, config) -> state.commitDescription()
-                .flatMap(description ->
-                    state.fileToCommit().map(file -> mcpGitAssistant.commit(description, file, staged))
-                )
+                .flatMap(description -> {
+                    final var finalDescription = ofNullable(issueRef)
+                            .map( issue -> "%s%n working on %s".formatted(description,issue))
+                            .orElse(description);
+                    return state.fileToCommit().map(file -> mcpGitAssistant.commit(finalDescription, file, staged));
+                })
                 .orElseGet(() -> completedFuture(null))
                 .thenApply($1 -> Map.<String, Object>of(
                         State.FILES, state.filesToCommit$removeFirst()));
@@ -273,6 +276,7 @@ public interface CommitAgent {
         private Path repositoryPath;
         private Consumer<McpSchema.LoggingMessageNotification> loggingConsumer;
         private boolean staged = false;
+        private String issueRef;
 
         public Builder chatModel( ChatModel chatModel ) {
             this.chatModel = chatModel;
@@ -291,6 +295,11 @@ public interface CommitAgent {
 
         public Builder staged( boolean staged ) {
             this.staged = staged;
+            return this;
+        }
+
+        public Builder issue(String issueRef) {
+            this.issueRef = issueRef;
             return this;
         }
 
@@ -351,7 +360,7 @@ public interface CommitAgent {
                     .addNode( "generate_commit_message", generateCommitAgent( mcpGitAssistant) )
                     // fix when the interruption is after a subgraph move out from the subgraph
                     .addNode( "verify_commit_message", AsyncNodeActionWithConfig.noop() )
-                    .addNode( "execute_commit", executeCommit(mcpGitAssistant, staged ) )
+                    .addNode( "execute_commit", executeCommit(mcpGitAssistant, staged, issueRef ) )
                     .addAfterCallNodeHook( "execute_commit", removeAttribute(State.MESSAGES_STATE))
                     .addNode( "next_file_to_commit",
                             nextFileToCommit( staged ),
@@ -366,6 +375,7 @@ public interface CommitAgent {
                     .addEdge( "execute_commit", "next_file_to_commit")
                     .compile( compileConfig );
         }
+
     }
 
 

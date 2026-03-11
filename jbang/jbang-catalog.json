@@ -1,0 +1,9 @@
+{
+  "aliases": {
+    "commit-assistant": {
+      "script-ref": "./jbang/CommitAssistant.java",
+      "description": "Git Commit Assistant - Generate commit messages using (local) AI ",
+      "tags": ["ai", "git","commit", "assistant"]
+    }
+  }
+}
