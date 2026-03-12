@@ -239,15 +239,24 @@ public interface CommitAgent {
         });
     }
 
-    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged, String issueRef ) {
+    static AsyncNodeActionWithConfig<State> verifyCommitMessage(String issueRef ) {
+        return (state, config) ->
+                state.commitDescription()
+                    .map(description ->
+                        ofNullable(issueRef)
+                            .map( issue -> "%s\n\nworking on %s".formatted(description,issue))
+                            .orElse(description))
+                .map(description ->
+                    completedFuture( Map.<String,Object>of( State.COMMIT_DESCRIPTION, description )) )
+                .orElseGet(() -> completedFuture(Map.of()));
+    }
+
+    static AsyncNodeActionWithConfig<State> executeCommit( McpGitAssistantClient mcpGitAssistant, boolean staged ) {
         requireNonNull( mcpGitAssistant, "mcpGitAssistant cannot be null");
         return (state, config) -> state.commitDescription()
-                .flatMap(description -> {
-                    final var finalDescription = ofNullable(issueRef)
-                            .map( issue -> "%s%n working on %s".formatted(description,issue))
-                            .orElse(description);
-                    return state.fileToCommit().map(file -> mcpGitAssistant.commit(finalDescription, file, staged));
-                })
+                .flatMap(description ->
+                    state.fileToCommit()
+                            .map(file -> mcpGitAssistant.commit(description, file, staged)))
                 .orElseGet(() -> completedFuture(null))
                 .thenApply($1 -> Map.<String, Object>of(
                         State.FILES, state.filesToCommit$removeFirst()));
@@ -357,10 +366,10 @@ public interface CommitAgent {
             return new StateGraph<>( State.SCHEMA, stateSerializer)
                     .addNode( "get_files_to_commit", filesToCommit(mcpGitAssistant, staged) )
                     .addAfterCallNodeHook( "get_files_to_commit", resetAttribute(State.MESSAGES_STATE))
-                    .addNode( "generate_commit_message", generateCommitAgent( mcpGitAssistant) )
+                    .addNode( "generate_commit_message", generateCommitAgent( mcpGitAssistant ) )
                     // fix when the interruption is after a subgraph move out from the subgraph
-                    .addNode( "verify_commit_message", AsyncNodeActionWithConfig.noop() )
-                    .addNode( "execute_commit", executeCommit(mcpGitAssistant, staged, issueRef ) )
+                    .addNode( "verify_commit_message", verifyCommitMessage( issueRef) )
+                    .addNode( "execute_commit", executeCommit(mcpGitAssistant, staged ) )
                     .addAfterCallNodeHook( "execute_commit", removeAttribute(State.MESSAGES_STATE))
                     .addNode( "next_file_to_commit",
                             nextFileToCommit( staged ),
